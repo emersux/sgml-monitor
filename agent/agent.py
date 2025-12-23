@@ -6,6 +6,8 @@ import uuid
 import time
 import sys
 import os
+import datetime
+import multiprocessing
 
 # Try to import WMI for Windows specific info
 try:
@@ -14,22 +16,53 @@ try:
 except ImportError:
     w = None
 
-
 # Configuration
 DEFAULT_SERVER_URL = "http://localhost:5000/api/report"
 
+# Determine the directory where the executable (or script) is located
+if getattr(sys, 'frozen', False):
+    APP_DIR = os.path.dirname(sys.executable)
+else:
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Setup logging to a file in the same directory
+LOG_FILE = os.path.join(APP_DIR, 'agent_monitor.log')
+
+def log(message):
+    try:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(LOG_FILE, 'a') as f:
+            f.write(f"[{timestamp}] {message}\n")
+    except:
+        pass # Fallback if permission denied
+
 def load_config():
-    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+    config_path = os.path.join(APP_DIR, 'config.json')
+    # Print to console for immediate debug
+    print(f"DEBUG: APP_DIR is {APP_DIR}")
+    print(f"DEBUG: Looking for config at: {config_path}")
+    log(f"Looking for config at: {config_path}")
+    
     if os.path.exists(config_path):
         try:
             with open(config_path, 'r') as f:
                 config = json.load(f)
-                return config.get('server_url', DEFAULT_SERVER_URL)
-        except:
+                url = config.get('server_url', DEFAULT_SERVER_URL)
+                log(f"Config loaded. URL: {url}")
+                print(f"DEBUG: Config loaded. URL: {url}")
+                return url
+        except Exception as e:
+            log(f"Error loading config: {e}")
+            print(f"DEBUG: Error loading config from {config_path}: {e}")
             pass
+    else:
+        log("Config file not found. Using default URL.")
+        print(f"DEBUG: Config file not found at {config_path}")
+        
     return DEFAULT_SERVER_URL
 
 SERVER_URL = load_config()
+
 
 
 def get_size(bytes, suffix="B"):
@@ -59,24 +92,6 @@ def get_system_info():
     except:
         return {}
 
-def get_cpu_info():
-    try:
-        # Use py-cpuinfo if installed for better brand string, else fallback
-        try:
-            import cpuinfo
-            info = cpuinfo.get_cpu_info()
-            brand = info.get('brand_raw', platform.processor())
-            hz = info.get('hz_advertised_friendly', '')
-        except ImportError:
-            brand = platform.processor()
-            hz = ""
-
-        return {
-            "brand": brand,
-            "hz": hz,
-            "count": psutil.cpu_count(logical=True),
-            "usage_percent": psutil.cpu_percent(interval=1)
-        }
     except:
         return {}
 
@@ -92,27 +107,8 @@ def get_memory_info():
     except:
         return {}
 
-def get_disk_info():
-    disks = []
-    try:
-        partitions = psutil.disk_partitions()
-        for partition in partitions:
-            try:
-                if 'cdrom' in partition.opts or partition.fstype == '':
-                    continue
-                partition_usage = psutil.disk_usage(partition.mountpoint)
-                disks.append({
-                    "device": partition.device,
-                    "mountpoint": partition.mountpoint,
-                    "fstype": partition.fstype,
-                    "total": partition_usage.total,
-                    "percent": partition_usage.percent
-                })
-            except PermissionError:
-                continue
-    except:
-        pass
-    return disks
+# Disk info function moved below
+
 
 def get_network_info():
     try:
@@ -140,18 +136,108 @@ def get_geolocation():
         pass
     return {"city": "Unknown", "region": "Unknown", "country": "Unknown"}
 
+
+def run_powershell(cmd):
+    try:
+        import subprocess
+        # Use -Encoding UTF8 to handle special chars if possible, but default is usually fine for basic data
+        # Adding ConvertTo-Json is key for easy parsing
+        full_cmd = f"{cmd} | ConvertTo-Json -Depth 1"
+        process = subprocess.Popen(["powershell", "-Command", full_cmd], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        result = process.communicate()
+        if result[0]:
+            try:
+                return json.loads(result[0])
+            except:
+                return result[0].strip() # Fallback to raw string
+    except Exception as e:
+        log(f"PS Error: {e}")
+    return None
+
 def get_windows_hardware_info():
     manufacturer = "Unknown"
     serial = "Unknown"
-    if w:
-        try:
-            system = w.Win32_ComputerSystem()[0]
-            manufacturer = system.Manufacturer
-            bios = w.Win32_BIOS()[0]
-            serial = bios.SerialNumber
-        except:
-            pass
+    
+    # Try via PowerShell (More reliable in frozen app than WMI lib)
+    try:
+        data = run_powershell("Get-CimInstance -ClassName Win32_BIOS | Select-Object Manufacturer, SerialNumber")
+        if data:
+            if isinstance(data, list): data = data[0] # Handle multiple items if ever
+            manufacturer = data.get('Manufacturer', 'Unknown')
+            serial = data.get('SerialNumber', 'Unknown')
+    except:
+        pass
+        
     return manufacturer, serial
+
+def get_user_info():
+    try:
+        # Get current user and domain
+        data = run_powershell("Get-CimInstance -ClassName Win32_ComputerSystem | Select-Object UserName, Domain, Name")
+        if data:
+            if isinstance(data, list): data = data[0]
+            return {
+                "username": data.get('UserName', 'Unknown'), # DOMAIN\User
+                "domain": data.get('Domain', 'Unknown'),
+                "hostname": data.get('Name', 'Unknown')
+            }
+    except:
+        pass
+    return {"username": "Unknown", "domain": "Unknown", "hostname": platform.node()}
+
+def get_cpu_info():
+    try:
+        # Get Name directly from Win32_Processor which matches Task Manager
+        data = run_powershell("Get-CimInstance -ClassName Win32_Processor | Select-Object Name, NumberOfCores, MaxClockSpeed")
+        brand = "Unknown CPU"
+        cores = 0
+        hz = ""
+        
+        if data:
+             if isinstance(data, list): data = data[0] # Use first CPU
+             brand = data.get('Name', brand)
+             cores = data.get('NumberOfCores', 0)
+             # MaxClockSpeed is in MHz
+             hz = f"{data.get('MaxClockSpeed', 0) / 1000:.2f} GHz"
+
+        return {
+            "brand": brand,
+            "hz": hz,
+            "count": cores,
+            "usage_percent": psutil.cpu_percent(interval=1)
+        }
+    except:
+         return {"brand": platform.processor(), "count": psutil.cpu_count(), "usage_percent": 0}
+
+def get_disk_info():
+    disks = []
+    try:
+        # psutil is good for usage, let's keep it but formatted nicely
+        partitions = psutil.disk_partitions()
+        for partition in partitions:
+            try:
+                if 'cdrom' in partition.opts or partition.fstype == '':
+                    continue
+                partition_usage = psutil.disk_usage(partition.mountpoint)
+                
+                # Format bytes to GB
+                total_gb = f"{partition_usage.total / (1024**3):.1f} GB"
+                free_gb = f"{partition_usage.free / (1024**3):.1f} GB"
+                
+                disks.append({
+                    "device": partition.device,
+                    "mountpoint": partition.mountpoint,
+                    "fstype": partition.fstype,
+                    "total": str(partition_usage.total),
+                    "total_fmt": total_gb,
+                    "free_fmt": free_gb,
+                    "percent": partition_usage.percent
+                })
+            except PermissionError:
+                continue
+    except:
+        pass
+    return disks
 
 def get_installed_software():
     software_list = []
@@ -197,12 +283,13 @@ def get_installed_software():
 
 
 def collect_and_send():
-    print(f"Starting SGML Agent...")
+    print(f"Starting SGML Agent... (VERSION: 2.0 - REQUEST TIMEOUT FIX)")
     print(f"Target Server: {SERVER_URL}")
     
     # 1. Gather all data
     print("Collecting system info...")
     sys_info = get_system_info()
+    user_info = get_user_info() # New field
     
     print("Collecting CPU/Mem info...")
     cpu_info = get_cpu_info()
@@ -225,12 +312,16 @@ def collect_and_send():
     
     uptime = time.time() - psutil.boot_time()
     
-    # Unique ID based on MAC or Serial
-    unique_id = str(uuid.getnode())
+    # Unique ID based on MAC or Serial (prefer serial if available)
+    if serial and serial != "Unknown":
+         unique_id = serial
+    else:
+         unique_id = str(uuid.getnode())
     
     payload = {
         "uuid": unique_id,
-        "hostname": sys_info.get('node_name'),
+        "hostname": user_info.get('hostname'),
+        "user_info": user_info, # New field sent to server
         "ip": ip_address,
         "os": sys_info,
         "cpu": cpu_info,
@@ -249,19 +340,27 @@ def collect_and_send():
     
     # 2. Send to server
     try:
+        log("Sending report to server...")
         print("Sending report to server...")
         headers = {'Content-Type': 'application/json'}
-        response = requests.post(SERVER_URL, data=json.dumps(payload), headers=headers)
+        # Add timeout to prevent hanging
+        response = requests.post(SERVER_URL, data=json.dumps(payload), headers=headers, timeout=30)
         
         if response.status_code == 200:
+            log("✅ Report sent successfully!")
             print("✅ Report sent successfully!")
         else:
+            log(f"❌ Server returned status: {response.status_code}")
+            log(f"Response: {response.text}")
             print(f"❌ Server returned status: {response.status_code}")
             print(response.text)
     except Exception as e:
+        log(f"❌ Failed to send report: {e}")
         print(f"❌ Failed to send report: {e}")
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
+    log("Manual execution started.")
     collect_and_send()
     # Keep window open if double clicked
     print("\nDone. Closing in 5 seconds...")

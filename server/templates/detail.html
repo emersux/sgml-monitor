@@ -38,12 +38,34 @@
                 {% for d in disk %}
                 <div class="disk-row">
                     <span class="value">{{ d.device }} ({{ d.fstype }})</span>
+                    <span class="sub-value" style="display:block; margin-bottom:2px;">
+                        Livre: {{ d.free_fmt|default('N/A') }} de {{ d.total_fmt|default('N/A') }}
+                    </span>
                     <div class="progress-bar">
                         <div class="fill" style="width: {{ d.percent }}%"></div>
                     </div>
-                    <span class="sub-value">{{ d.percent }}% ocupado</span>
                 </div>
                 {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- User Info (New Panel) -->
+    <div class="panel user-panel">
+        <h3><span class="material-icons-round">person</span> Usuário Atual</h3>
+        {% set user = machine.user_info|from_json %}
+        <div class="spec-list">
+            <div class="spec-item">
+                <span class="label">Usuário</span>
+                <span class="value">{{ user.username }}</span>
+            </div>
+            <div class="spec-item">
+                <span class="label">Domínio</span>
+                <span class="value">{{ user.domain }}</span>
+            </div>
+            <div class="spec-item">
+                <span class="label">Hostname Real</span>
+                <span class="value">{{ user.hostname }}</span>
             </div>
         </div>
     </div>
@@ -81,6 +103,14 @@
                 <span class="region">{{ geo.region }}</span>
                 <span class="country">{{ geo.country }}</span>
             </div>
+            {% if geo.loc %}
+            <div class="map-link" style="margin-top:0.5rem;">
+                <a href="https://www.google.com/maps/search/?api=1&query={{ geo.loc }}" target="_blank"
+                    style="color:var(--accent); font-size:0.9rem; display:flex; align-items:center; justify-content:center; gap:4px;">
+                    <span class="material-icons-round" style="font-size:16px;">map</span> Ver no Mapa
+                </a>
+            </div>
+            {% endif %}
             <span class="ip-info">IP Público: {{ geo.ip }}</span>
             <span class="org-info">{{ geo.org }}</span>
         </div>

@@ -15,8 +15,8 @@ sys.path.append(current_dir)
 import agent
 
 class SGMLAgentService(win32serviceutil.ServiceFramework):
-    _svc_name_ = "SGMLAgent"
-    _svc_display_name_ = "SGML Agent Service"
+    _svc_name_ = "SGMLMonitor"
+    _svc_display_name_ = "SGML Monitor Service"
     _svc_description_ = "Coleta e envia dados de hardware e software para o servidor SGML."
 
     def __init__(self, args):
@@ -33,6 +33,15 @@ class SGMLAgentService(win32serviceutil.ServiceFramework):
         servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE,
                               servicemanager.PYS_SERVICE_STARTED,
                               (self._svc_name_, ''))
+        
+        # Change CWD to the directory of the executable/script
+        if getattr(sys, 'frozen', False):
+            home_dir = os.path.dirname(sys.executable)
+        else:
+            home_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        os.chdir(home_dir)
+        
         self.main()
 
     def main(self):

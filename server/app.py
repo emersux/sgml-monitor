@@ -39,9 +39,16 @@ def init_db():
                 serial_number TEXT,
                 geolocation TEXT,
                 installed_software TEXT,
-                metrics TEXT
+                metrics TEXT,
+                user_info TEXT
             )
         ''')
+        # Simple migration: Add column if not exists (failed if exists, pass)
+        try:
+            db.execute("ALTER TABLE machines ADD COLUMN user_info TEXT")
+        except:
+            pass
+            
         db.commit()
 
 @app.template_filter('from_json')
@@ -94,11 +101,13 @@ def report():
     installed_software = json.dumps(data.get('software'))
     metrics = json.dumps(data.get('metrics'))
     
+    user_info = json.dumps(data.get('user_info'))
+    
     now = datetime.datetime.now()
     
     db.execute('''
-        INSERT INTO machines (id, hostname, ip, os_info, cpu_info, memory_info, disk_info, uptime, last_seen, manufacturer, serial_number, geolocation, installed_software, metrics)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO machines (id, hostname, ip, os_info, cpu_info, memory_info, disk_info, uptime, last_seen, manufacturer, serial_number, geolocation, installed_software, metrics, user_info)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             hostname=excluded.hostname,
             ip=excluded.ip,
@@ -112,8 +121,9 @@ def report():
             serial_number=excluded.serial_number,
             geolocation=excluded.geolocation,
             installed_software=excluded.installed_software,
-            metrics=excluded.metrics
-    ''', (machine_id, hostname, ip, os_info, cpu_info, memory_info, disk_info, uptime, now, manufacturer, serial_number, geolocation, installed_software, metrics))
+            metrics=excluded.metrics,
+            user_info=excluded.user_info
+    ''', (machine_id, hostname, ip, os_info, cpu_info, memory_info, disk_info, uptime, now, manufacturer, serial_number, geolocation, installed_software, metrics, user_info))
     
     db.commit()
     return jsonify({"status": "success", "message": "Data received"}), 200

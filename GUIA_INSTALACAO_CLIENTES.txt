@@ -1,0 +1,30 @@
+GUIA DE INSTALAÇÃO EM MÁQUINAS (CLIENTES)
+
+Para instalar o agente de monitoramento em novos computadores, siga estes passos:
+
+1. PREPARAÇÃO
+   Localize a pasta "dist" no computador onde você criou o projeto.
+   Ela deve conter 3 arquivos principais:
+   - SGMLAgent.exe (O programa principal)
+   - config.json   (A configuração com o link do servidor)
+   - install_service.bat (O instalador)
+
+2. TRANSFERÊNCIA
+   Copie esses 3 arquivos (ou a pasta inteira) para um Pen Drive, ou via rede, para o computador que deseja monitorar.
+   Recomendamos criar uma pasta como "C:\Monitoramento" no destino e colar os arquivos lá.
+
+3. INSTALAÇÃO
+   No computador de destino:
+   - Abra a pasta onde colou os arquivos.
+   - Clique com o botão direito em "install_service.bat".
+   - Selecione "Executar como Administrador".
+
+4. VERIFICAÇÃO
+   - Aguarde a mensagem "Instalação Concluída".
+   - Em 1 ou 2 minutos, a nova máquina aparecerá automaticamente no site:
+     https://sgml-monitor.onrender.com
+
+OBSERVAÇÕES:
+- Não é necessário instalar Python na máquina de destino.
+- O agente inicia automaticamente com o Windows.
+- Se mudar de servidor, basta atualizar o config.json e rodar o instalador novamente.

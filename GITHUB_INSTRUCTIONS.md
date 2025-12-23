@@ -17,7 +17,7 @@ Copie os comandos que aparecerão na tela do GitHub sob o título **"…or push 
 Eles serão parecidos com isso (substitua `SEU_USUARIO` pelo seu user real):
 
 ```bash
-git remote add origin https://github.com/SEU_USUARIO/sgml-monitor.git
+git remote add origin https://github.com/emersux/sgml-monitor.git
 git branch -M main
 git push -u origin main
 ```
