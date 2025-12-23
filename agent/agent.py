@@ -8,6 +8,7 @@ import sys
 import os
 import datetime
 import multiprocessing
+import subprocess
 
 # Try to import WMI for Windows specific info
 try:
@@ -137,117 +138,128 @@ def get_geolocation():
     return {"city": "Unknown", "region": "Unknown", "country": "Unknown"}
 
 
-def run_powershell(cmd):
+import winreg
+
+def get_registry_value(key_path, value_name):
     try:
-        import subprocess
-        # Force UTF-8 encoding for output to handle special chars correctly
-        full_cmd = f'$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8; {cmd} | ConvertTo-Json -Depth 1'
-        
-        # specific fix for "creation flag" to hide window not needed in service but good for testing
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
+            value, _ = winreg.QueryValueEx(key, value_name)
+            return value
+    except:
+        return None
+
+def run_cmd_simple(cmd_args):
+    # Simple command runner for wmic/hostname (no powershell complexity)
+    try:
         startupinfo = None
         if os.name == 'nt':
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             
-        process = subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", full_cmd], 
-                                   stdout=subprocess.PIPE, 
-                                   stderr=subprocess.PIPE, 
-                                   text=True, 
-                                   encoding='utf-8',
-                                   startupinfo=startupinfo)
-        result, error = process.communicate(timeout=15)
-        
-        if error:
-            log(f"PS Error: {error}")
+        process = subprocess.Popen(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, startupinfo=startupinfo)
+        out, _ = process.communicate(timeout=5)
+        return out.strip()
+    except:
+        return ""
 
-        if result:
-            try:
-                return json.loads(result)
-            except:
-                return result.strip()
-    except Exception as e:
-        log(f"PS Exception: {e}")
-    return None
+
+# Try to import WMI (already in requirements)
+try:
+    import wmi
+except ImportError:
+    wmi = None
+
+def get_cpu_info():
+    brand = platform.processor()
+    hz_str = ""
+    usage = 0
+    
+    # 1. Try Registry for Name (Fastest)
+    brand_reg = get_registry_value(r"HARDWARE\DESCRIPTION\System\CentralProcessor\0", "ProcessorNameString")
+    if brand_reg:
+        brand = brand_reg
+        
+    # 2. Try WMI for Usage/Cores
+    try:
+        if wmi:
+            w = wmi.WMI()
+            for processor in w.Win32_Processor():
+                if not brand_reg: brand = processor.Name
+                hz_str = f"{processor.MaxClockSpeed / 1000:.2f} GHz"
+                break # Just first CPU
+    except:
+        pass
+
+    return {
+        "brand": brand,
+        "hz": hz_str,
+        "count": psutil.cpu_count(logical=True),
+        "usage_percent": psutil.cpu_percent(interval=1)
+    }
 
 def get_windows_hardware_info():
     manufacturer = "Unknown"
     serial = "Unknown"
     
-    try:
-        # Get Serial Number (Service Tag) - Critical
-        # Win32_BIOS usually has the vendor specific SerialNumber
-        data = run_powershell("Get-CimInstance -ClassName Win32_BIOS | Select-Object Manufacturer, SerialNumber")
-        if data:
-            if isinstance(data, list): data = data[0]
-            manufacturer = data.get('Manufacturer', 'Unknown').strip()
-            serial = data.get('SerialNumber', 'Unknown').strip()
-            
-            # Fallback if Serial is empty or generic
-            if not serial or serial.lower() == 'to be filled by o.e.m.':
-                 # Try getting from baseboard
-                 bb_data = run_powershell("Get-CimInstance -ClassName Win32_BaseBoard | Select-Object SerialNumber")
-                 if bb_data:
-                     if isinstance(bb_data, list): bb_data = bb_data[0]
-                     serial = bb_data.get('SerialNumber', serial)
-    except:
-        pass
-        
+    if wmi:
+        try:
+            w = wmi.WMI()
+            # BIOS
+            for bios in w.Win32_BIOS():
+                manufacturer = bios.Manufacturer
+                serial = bios.SerialNumber
+                break
+                
+            # Fallback for serial
+            if serial.lower() == 'to be filled by o.e.m.':
+                 for board in w.Win32_BaseBoard():
+                      serial = board.SerialNumber
+                      break
+        except:
+             pass
+             
     return manufacturer, serial
 
 def get_user_info():
-    try:
-        # Win32_ComputerSystem UserName is the currently logged on interactive user
-        data = run_powershell("Get-CimInstance -ClassName Win32_ComputerSystem | Select-Object UserName, Domain, Name")
-        if data:
-            if isinstance(data, list): data = data[0]
+    username = "Nenhum usuário logado"
+    domain = ""
+    hostname = platform.node()
+    
+    if wmi:
+        try:
+            w = wmi.WMI()
+            found = False
+            # Method: Owner of explorer.exe
+            for process in w.Win32_Process(Name='explorer.exe'):
+                try:
+                    owner_sid = process.GetOwnerSid() # Can fail
+                    owner = process.GetOwner()
+                    if owner:
+                         user = owner.get('User', '')
+                         dom = owner.get('Domain', '')
+                         if user:
+                             username = user
+                             domain = dom
+                             found = True
+                             break
+                except:
+                    pass
             
-            username = data.get('UserName')
-            # If standard method fails (often empty if RDP or locked), try finding explorer.exe owner
-            if not username:
-                 try:
-                     # Advanced fallback: get owner of explorer.exe
-                     exp_data = run_powershell("Get-CimInstance -ClassName Win32_Process -Filter \"Name='explorer.exe'\" | Invoke-CimMethod -MethodName GetOwner | Select-Object User, Domain")
-                     if exp_data:
-                         if isinstance(exp_data, list): exp_data = exp_data[0]
-                         u = exp_data.get('User', '')
-                         d = exp_data.get('Domain', '')
-                         if u:
-                             username = f"{d}\\{u}" if d else u
-                 except:
-                     pass
+            if not found:
+                 # Fallback: ComputerSystem UserName
+                 for cs in w.Win32_ComputerSystem():
+                      if cs.UserName:
+                           username = cs.UserName
+                           break
+
+        except:
+            pass
             
-            return {
-                "username": username if username else "Nenhum usuário logado",
-                "domain": data.get('Domain', 'Unknown'),
-                "hostname": data.get('Name', 'Unknown')
-            }
-    except Exception as e:
-        log(f"User Info Error: {e}")
-        
-    return {"username": "Unknown", "domain": "Unknown", "hostname": platform.node()}
-
-def get_cpu_info():
-    try:
-        # Get Name directly from Win32_Processor which matches Task Manager
-        data = run_powershell("Get-CimInstance -ClassName Win32_Processor | Select-Object Name, NumberOfCores, MaxClockSpeed")
-        brand = "Unknown CPU"
-        cores = 0
-        hz = ""
-        
-        if data:
-             if isinstance(data, list): data = data[0]
-             brand = data.get('Name', brand).strip()
-             cores = data.get('NumberOfCores', 0)
-             hz = f"{data.get('MaxClockSpeed', 0) / 1000:.2f} GHz"
-
-        return {
-            "brand": brand,
-            "hz": hz,
-            "count": cores,
-            "usage_percent": psutil.cpu_percent(interval=1)
-        }
-    except:
-         return {"brand": platform.processor(), "count": psutil.cpu_count(), "usage_percent": 0}
+    return {
+        "username": username,
+        "domain": domain,
+        "hostname": hostname
+    }
 
 def get_disk_info():
     disks = []
