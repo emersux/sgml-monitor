@@ -20,7 +20,7 @@ RUN sed -i '/pywin32/d' requirements.txt && \
 
 # Copia o código do servidor
 COPY server/ ./server/
-COPY machines.db . 
+
 
 # Define variáveis de ambiente
 ENV FLASK_APP=server/app.py
