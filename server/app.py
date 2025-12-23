@@ -89,7 +89,7 @@ def login():
         pwd = request.form['password']
         
         # Hardcoded credentials as requested
-        if user == 'gaspar' and pwd == '123@!#AS':
+        if user == 'gaspar' and pwd == '123!@#AS':
             session['user'] = user
             return redirect(url_for('index'))
         else:
