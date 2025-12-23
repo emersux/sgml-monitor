@@ -60,7 +60,7 @@
                 <span class="label">Armazenamento</span>
                 {% for d in disk %}
                 <div class="disk-row">
-                    <span class="value">{{ d.device }} ({{ d.fstype }})</span>
+                    <span class="value">{{ d.device }}</span>
                     <span class="sub-value" style="display:block; margin-bottom:2px;">
                         Livre: {{ d.free_fmt|default('N/A') }} de {{ d.total_fmt|default('N/A') }}
                     </span>

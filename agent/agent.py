@@ -140,31 +140,55 @@ def get_geolocation():
 def run_powershell(cmd):
     try:
         import subprocess
-        # Use -Encoding UTF8 to handle special chars if possible, but default is usually fine for basic data
-        # Adding ConvertTo-Json is key for easy parsing
-        full_cmd = f"{cmd} | ConvertTo-Json -Depth 1"
-        process = subprocess.Popen(["powershell", "-Command", full_cmd], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        result = process.communicate()
-        if result[0]:
+        # Force UTF-8 encoding for output to handle special chars correctly
+        full_cmd = f'$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8; {cmd} | ConvertTo-Json -Depth 1'
+        
+        # specific fix for "creation flag" to hide window not needed in service but good for testing
+        startupinfo = None
+        if os.name == 'nt':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+        process = subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", full_cmd], 
+                                   stdout=subprocess.PIPE, 
+                                   stderr=subprocess.PIPE, 
+                                   text=True, 
+                                   encoding='utf-8',
+                                   startupinfo=startupinfo)
+        result, error = process.communicate(timeout=15)
+        
+        if error:
+            log(f"PS Error: {error}")
+
+        if result:
             try:
-                return json.loads(result[0])
+                return json.loads(result)
             except:
-                return result[0].strip() # Fallback to raw string
+                return result.strip()
     except Exception as e:
-        log(f"PS Error: {e}")
+        log(f"PS Exception: {e}")
     return None
 
 def get_windows_hardware_info():
     manufacturer = "Unknown"
     serial = "Unknown"
     
-    # Try via PowerShell (More reliable in frozen app than WMI lib)
     try:
+        # Get Serial Number (Service Tag) - Critical
+        # Win32_BIOS usually has the vendor specific SerialNumber
         data = run_powershell("Get-CimInstance -ClassName Win32_BIOS | Select-Object Manufacturer, SerialNumber")
         if data:
-            if isinstance(data, list): data = data[0] # Handle multiple items if ever
-            manufacturer = data.get('Manufacturer', 'Unknown')
-            serial = data.get('SerialNumber', 'Unknown')
+            if isinstance(data, list): data = data[0]
+            manufacturer = data.get('Manufacturer', 'Unknown').strip()
+            serial = data.get('SerialNumber', 'Unknown').strip()
+            
+            # Fallback if Serial is empty or generic
+            if not serial or serial.lower() == 'to be filled by o.e.m.':
+                 # Try getting from baseboard
+                 bb_data = run_powershell("Get-CimInstance -ClassName Win32_BaseBoard | Select-Object SerialNumber")
+                 if bb_data:
+                     if isinstance(bb_data, list): bb_data = bb_data[0]
+                     serial = bb_data.get('SerialNumber', serial)
     except:
         pass
         
@@ -172,17 +196,34 @@ def get_windows_hardware_info():
 
 def get_user_info():
     try:
-        # Get current user and domain
+        # Win32_ComputerSystem UserName is the currently logged on interactive user
         data = run_powershell("Get-CimInstance -ClassName Win32_ComputerSystem | Select-Object UserName, Domain, Name")
         if data:
             if isinstance(data, list): data = data[0]
+            
+            username = data.get('UserName')
+            # If standard method fails (often empty if RDP or locked), try finding explorer.exe owner
+            if not username:
+                 try:
+                     # Advanced fallback: get owner of explorer.exe
+                     exp_data = run_powershell("Get-CimInstance -ClassName Win32_Process -Filter \"Name='explorer.exe'\" | Invoke-CimMethod -MethodName GetOwner | Select-Object User, Domain")
+                     if exp_data:
+                         if isinstance(exp_data, list): exp_data = exp_data[0]
+                         u = exp_data.get('User', '')
+                         d = exp_data.get('Domain', '')
+                         if u:
+                             username = f"{d}\\{u}" if d else u
+                 except:
+                     pass
+            
             return {
-                "username": data.get('UserName', 'Unknown'), # DOMAIN\User
+                "username": username if username else "Nenhum usuário logado",
                 "domain": data.get('Domain', 'Unknown'),
                 "hostname": data.get('Name', 'Unknown')
             }
-    except:
-        pass
+    except Exception as e:
+        log(f"User Info Error: {e}")
+        
     return {"username": "Unknown", "domain": "Unknown", "hostname": platform.node()}
 
 def get_cpu_info():
@@ -194,10 +235,9 @@ def get_cpu_info():
         hz = ""
         
         if data:
-             if isinstance(data, list): data = data[0] # Use first CPU
-             brand = data.get('Name', brand)
+             if isinstance(data, list): data = data[0]
+             brand = data.get('Name', brand).strip()
              cores = data.get('NumberOfCores', 0)
-             # MaxClockSpeed is in MHz
              hz = f"{data.get('MaxClockSpeed', 0) / 1000:.2f} GHz"
 
         return {
