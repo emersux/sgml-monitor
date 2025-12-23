@@ -1,10 +1,33 @@
+```html
 {% extends 'base.html' %}
 
 {% block content %}
 <div class="detail-header">
-    <a href="/" class="back-link">
-        <span class="material-icons-round">arrow_back</span> Voltar
-    </a>
+    <div class="header-actions">
+        <!-- Warranty Check Logic -->
+        {% if machine.serial_number and machine.serial_number != 'Unknown' %}
+        {% set manu = machine.manufacturer|lower %}
+        {% set link = '#' %}
+        {% if 'dell' in manu %}
+        {% set link = 'https://www.dell.com/support/home/pt-br/product-support/servicetag/' + machine.serial_number +
+        '/overview' %}
+        {% elif 'hp' in manu or 'hewlett' in manu %}
+        {% set link = 'https://support.hp.com/br-pt/search?q=' + machine.serial_number %}
+        {% elif 'lenovo' in manu %}
+        {% set link = 'https://pcsupport.lenovo.com/br/pt/search?query=' + machine.serial_number %}
+        {% endif %}
+
+        {% if link != '#' %}
+        <a href="{{ link }}" target="_blank" class="btn secondary small">
+            <span class="material-icons-round">verified_user</span> Verificar Garantia
+        </a>
+        {% endif %}
+        {% endif %}
+
+        <a href="/" class="btn secondary">
+            <span class="material-icons-round">arrow_back</span> Voltar
+        </a>
+    </div>
     <div class="title-section">
         <h1>{{ machine.hostname }}</h1>
         <div class="badges">

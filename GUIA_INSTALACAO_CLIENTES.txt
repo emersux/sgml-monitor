@@ -5,9 +5,9 @@ Para instalar o agente de monitoramento em novos computadores, siga estes passos
 1. PREPARAÇÃO
    Localize a pasta "dist" no computador onde você criou o projeto.
    Ela deve conter 3 arquivos principais:
-   - SGMLAgent.exe (O programa principal)
-   - config.json   (A configuração com o link do servidor)
-   - install_service.bat (O instalador)
+   - SGMLMonitor.exe (O programa principal V2)
+   - config.json     (A configuração com o link do servidor)
+   - install_monitor.bat (O instalador novo)
 
 2. TRANSFERÊNCIA
    Copie esses 3 arquivos (ou a pasta inteira) para um Pen Drive, ou via rede, para o computador que deseja monitorar.
@@ -16,7 +16,7 @@ Para instalar o agente de monitoramento em novos computadores, siga estes passos
 3. INSTALAÇÃO
    No computador de destino:
    - Abra a pasta onde colou os arquivos.
-   - Clique com o botão direito em "install_service.bat".
+   - Clique com o botão direito em "install_monitor.bat".
    - Selecione "Executar como Administrador".
 
 4. VERIFICAÇÃO
