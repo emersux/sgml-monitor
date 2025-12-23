@@ -341,3 +341,91 @@ footer {
 .map-link a:hover {
     text-decoration: underline;
 }
+
+/* Action Buttons */
+.btn.warning {
+    background-color: #f59e0b;
+    border: none;
+    color: #fff;
+}
+
+.btn.warning:hover {
+    background-color: #d97706;
+}
+
+.btn.danger {
+    background-color: #ef4444;
+    border: none;
+    color: #fff;
+}
+
+.btn.danger:hover {
+    background-color: #dc2626;
+}
+
+/* Login */
+.login-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 60vh;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 400px;
+    padding: 2rem;
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.login-header .icon {
+    font-size: 3rem;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+}
+
+.form-group input {
+    width: 100%;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: white;
+    font-size: 1rem;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.alert {
+    padding: 0.75rem;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.full-width {
+    width: 100%;
+    justify-content: center;
+}

@@ -21,7 +21,11 @@
                 SGML
             </div>
             <nav>
+                {% if session.get('user') %}
                 <a href="/" class="{% if request.path == '/' %}active{% endif %}">Dashboard</a>
+                <a href="/logout" class="btn secondary small"
+                    style="margin-left: 1rem; border: 1px solid var(--border);">Sair</a>
+                {% endif %}
             </nav>
         </header>
 

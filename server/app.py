@@ -2,9 +2,11 @@ import sqlite3
 import json
 import datetime
 import os
-from flask import Flask, render_template, request, jsonify, g
+import functools
+from flask import Flask, render_template, request, jsonify, g, session, redirect, url_for
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'sgml_secret_key_fixed_2025')
 DB_FILE = os.environ.get('DB_PATH', 'machines.db')
 
 def get_db():
@@ -70,7 +72,38 @@ def format_uptime_filter(seconds):
     if seconds is None: return "N/A"
     return str(datetime.timedelta(seconds=int(seconds)))
 
+
+# Auth Decorator
+def login_required(view):
+    @functools.wraps(view)
+    def wrapped_view(**kwargs):
+        if session.get('user') is None:
+            return redirect(url_for('login'))
+        return view(**kwargs)
+    return wrapped_view
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        user = request.form['username']
+        pwd = request.form['password']
+        
+        # Hardcoded credentials as requested
+        if user == 'gaspar' and pwd == '123@!#AS':
+            session['user'] = user
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error="Usuário ou senha incorretos")
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def index():
     db = get_db()
     cursor = db.execute('SELECT * FROM machines ORDER BY last_seen DESC')
@@ -78,6 +111,7 @@ def index():
     return render_template('dashboard.html', machines=machines)
 
 @app.route('/machine/<id>')
+@login_required
 def machine_detail(id):
     db = get_db()
     cursor = db.execute('SELECT * FROM machines WHERE id = ?', (id,))
@@ -149,6 +183,7 @@ def report():
 init_db()
 
 @app.route('/machine/<machine_id>/action', methods=['POST'])
+@login_required
 def machine_action(machine_id):
     action = request.form.get('action')
     if action in ['restart', 'shutdown']:
