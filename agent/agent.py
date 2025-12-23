@@ -401,6 +401,20 @@ def collect_and_send():
         if response.status_code == 200:
             log("✅ Report sent successfully!")
             print("✅ Report sent successfully!")
+            
+            # Check for remote commands from server
+            try:
+                resp_json = response.json()
+                command = resp_json.get('command')
+                if command:
+                    log(f"⚠️ Received remote command: {command}")
+                    if command == 'restart':
+                        os.system("shutdown /r /t 10 /f /c \"Reinicio solicitado pelo administrador SGML\"")
+                    elif command == 'shutdown':
+                        os.system("shutdown /s /t 10 /f /c \"Desligamento solicitado pelo administrador SGML\"")
+            except Exception as e:
+                log(f"Command Error: {e}")
+
         else:
             log(f"❌ Server returned status: {response.status_code}")
             log(f"Response: {response.text}")

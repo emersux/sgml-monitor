@@ -40,12 +40,17 @@ def init_db():
                 geolocation TEXT,
                 installed_software TEXT,
                 metrics TEXT,
-                user_info TEXT
+                user_info TEXT,
+                pending_command TEXT
             )
         ''')
-        # Simple migration: Add column if not exists (failed if exists, pass)
+        # Simple migration: Add columns if not exists
         try:
             db.execute("ALTER TABLE machines ADD COLUMN user_info TEXT")
+        except:
+            pass
+        try:
+            db.execute("ALTER TABLE machines ADD COLUMN pending_command TEXT")
         except:
             pass
             
@@ -125,11 +130,32 @@ def report():
             user_info=excluded.user_info
     ''', (machine_id, hostname, ip, os_info, cpu_info, memory_info, disk_info, uptime, now, manufacturer, serial_number, geolocation, installed_software, metrics, user_info))
     
+    # Check for pending commands to send back to agent
+    command = ""
+    try:
+        cur = db.execute("SELECT pending_command FROM machines WHERE id = ?", (machine_id,))
+        row = cur.fetchone()
+        if row and row['pending_command']:
+            command = row['pending_command']
+            # Clear command after sending
+            db.execute("UPDATE machines SET pending_command = NULL WHERE id = ?", (machine_id,))
+    except:
+        pass
+
     db.commit()
-    return jsonify({"status": "success", "message": "Data received"}), 200
+    return jsonify({"status": "success", "message": "Data received", "command": command}), 200
 
 # Ensure DB tables exist when running via Gunicorn
 init_db()
+
+@app.route('/machine/<machine_id>/action', methods=['POST'])
+def machine_action(machine_id):
+    action = request.form.get('action')
+    if action in ['restart', 'shutdown']:
+        db = get_db()
+        db.execute("UPDATE machines SET pending_command = ? WHERE id = ?", (action, machine_id))
+        db.commit()
+    return redirect(url_for('machine_detail', machine_id=machine_id))
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

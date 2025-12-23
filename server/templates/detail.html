@@ -136,41 +136,64 @@
             <span class="ip-info">IP Público: {{ geo.ip }}</span>
             <span class="org-info">{{ geo.org }}</span>
         </div>
+        <span class="org-info">{{ geo.org }}</span>
     </div>
+</div>
 
-    <!-- Software -->
-    <div class="panel software-panel full-width">
-        <h3><span class="material-icons-round">apps</span> Software Instalado</h3>
-        {% set software = machine.installed_software|from_json %}
-        <div class="software-table-wrapper">
-            <table class="software-table">
-                <thead>
-                    <tr>
-                        <th>Nome</th>
-                        <th>Versão</th>
-                        <th>Vendedor</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for sw in software[:50] %}
-                    <tr>
-                        <td>{{ sw.name }}</td>
-                        <td>{{ sw.version }}</td>
-                        <td>{{ sw.vendor }}</td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="3">Nenhum software detectado ou lista vazia.</td>
-                    </tr>
-                    {% endfor %}
-                    {% if software|length > 50 %}
-                    <tr>
-                        <td colspan="3" class="more-row">... e mais {{ software|length - 50 }} itens</td>
-                    </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
+<!-- Remote Actions -->
+<div class="panel actions-panel">
+    <h3><span class="material-icons-round">bolt</span> Ações Remotas</h3>
+    <div class="actions-grid">
+        <form action="/machine/{{ machine.id }}/action" method="POST"
+            onsubmit="return confirm('Tem certeza que deseja REINICIAR esta máquina?')">
+            <input type="hidden" name="action" value="restart">
+            <button type="submit" class="btn warning">
+                <span class="material-icons-round">restart_alt</span> Reiniciar
+            </button>
+        </form>
+        <form action="/machine/{{ machine.id }}/action" method="POST"
+            onsubmit="return confirm('Tem certeza que deseja DESLIGAR esta máquina? O usuário perderá dados não salvos.')">
+            <input type="hidden" name="action" value="shutdown">
+            <button type="submit" class="btn danger">
+                <span class="material-icons-round">power_settings_new</span> Desligar
+            </button>
+        </form>
     </div>
+</div>
+
+<!-- Software -->
+<div class="panel software-panel full-width">
+    <h3><span class="material-icons-round">apps</span> Software Instalado</h3>
+    {% set software = machine.installed_software|from_json %}
+    <div class="software-table-wrapper">
+        <table class="software-table">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Versão</th>
+                    <th>Vendedor</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sw in software[:50] %}
+                <tr>
+                    <td>{{ sw.name }}</td>
+                    <td>{{ sw.version }}</td>
+                    <td>{{ sw.vendor }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3">Nenhum software detectado ou lista vazia.</td>
+                </tr>
+                {% endfor %}
+                {% if software|length > 50 %}
+                <tr>
+                    <td colspan="3" class="more-row">... e mais {{ software|length - 50 }} itens</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
 </div>
 {% endblock %}
