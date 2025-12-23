@@ -1,0 +1,124 @@
+import sqlite3
+import json
+import datetime
+import os
+from flask import Flask, render_template, request, jsonify, g
+
+app = Flask(__name__)
+DB_FILE = os.environ.get('DB_PATH', 'machines.db')
+
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DB_FILE)
+        db.row_factory = sqlite3.Row
+    return db
+
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
+
+def init_db():
+    with app.app_context():
+        db = get_db()
+        # Create table for machines
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS machines (
+                id TEXT PRIMARY KEY,
+                hostname TEXT,
+                ip TEXT,
+                os_info TEXT,
+                cpu_info TEXT,
+                memory_info TEXT,
+                disk_info TEXT,
+                uptime REAL,
+                last_seen TIMESTAMP,
+                manufacturer TEXT,
+                serial_number TEXT,
+                geolocation TEXT,
+                installed_software TEXT,
+                metrics TEXT
+            )
+        ''')
+        db.commit()
+
+@app.template_filter('from_json')
+def from_json_filter(value):
+    if value:
+        try:
+            return json.loads(value)
+        except:
+            return value
+    return {}
+
+@app.template_filter('format_uptime')
+def format_uptime_filter(seconds):
+    if seconds is None: return "N/A"
+    return str(datetime.timedelta(seconds=int(seconds)))
+
+@app.route('/')
+def index():
+    db = get_db()
+    cursor = db.execute('SELECT * FROM machines ORDER BY last_seen DESC')
+    machines = cursor.fetchall()
+    return render_template('dashboard.html', machines=machines)
+
+@app.route('/machine/<id>')
+def machine_detail(id):
+    db = get_db()
+    cursor = db.execute('SELECT * FROM machines WHERE id = ?', (id,))
+    machine = cursor.fetchone()
+    if machine:
+        return render_template('detail.html', machine=machine)
+    return "Machine not found", 404
+
+@app.route('/api/report', methods=['POST'])
+def report():
+    data = request.json
+    db = get_db()
+    
+    # Extract core fields
+    machine_id = data.get('uuid') or data.get('serial_number') or data.get('hostname')
+    hostname = data.get('hostname')
+    ip = data.get('ip')
+    os_info = json.dumps(data.get('os'))
+    cpu_info = json.dumps(data.get('cpu'))
+    memory_info = json.dumps(data.get('memory'))
+    disk_info = json.dumps(data.get('disk'))
+    uptime = data.get('uptime')
+    manufacturer = data.get('manufacturer')
+    serial_number = data.get('serial_number')
+    geolocation = json.dumps(data.get('geolocation'))
+    installed_software = json.dumps(data.get('software'))
+    metrics = json.dumps(data.get('metrics'))
+    
+    now = datetime.datetime.now()
+    
+    db.execute('''
+        INSERT INTO machines (id, hostname, ip, os_info, cpu_info, memory_info, disk_info, uptime, last_seen, manufacturer, serial_number, geolocation, installed_software, metrics)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            hostname=excluded.hostname,
+            ip=excluded.ip,
+            os_info=excluded.os_info,
+            cpu_info=excluded.cpu_info,
+            memory_info=excluded.memory_info,
+            disk_info=excluded.disk_info,
+            uptime=excluded.uptime,
+            last_seen=excluded.last_seen,
+            manufacturer=excluded.manufacturer,
+            serial_number=excluded.serial_number,
+            geolocation=excluded.geolocation,
+            installed_software=excluded.installed_software,
+            metrics=excluded.metrics
+    ''', (machine_id, hostname, ip, os_info, cpu_info, memory_info, disk_info, uptime, now, manufacturer, serial_number, geolocation, installed_software, metrics))
+    
+    db.commit()
+    return jsonify({"status": "success", "message": "Data received"}), 200
+
+if __name__ == '__main__':
+    init_db()
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)

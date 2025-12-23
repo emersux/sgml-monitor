@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Visão Geral</h1>
+    <p class="subtitle">{{ machines|length }} máquinas monitoradas</p>
+</div>
+
+<div class="machines-grid">
+    {% for machine in machines %}
+    <a href="/machine/{{ machine.id }}" class="machine-card">
+        <div class="card-status active"></div>
+        <div class="card-header">
+            <span class="material-icons-round computer-icon">computer</span>
+            <div class="header-text">
+                <h2>{{ machine.hostname }}</h2>
+                <span class="ip-address">{{ machine.ip }}</span>
+            </div>
+        </div>
+
+        <div class="card-stats">
+            <div class="stat">
+                <span class="label">OS</span>
+                {% set os = machine.os_info|from_json %}
+                <span class="value">{{ os.system }} {{ os.release }}</span>
+            </div>
+            <div class="stat">
+                <span class="label">Uptime</span>
+                <span class="value">{{ machine.uptime|format_uptime }}</span>
+            </div>
+        </div>
+
+        <div class="card-footer">
+            <span class="last-seen">Visto em: {{ machine.last_seen }}</span>
+            <span class="material-icons-round arrow-icon">arrow_forward</span>
+        </div>
+    </a>
+    {% else %}
+    <div class="empty-state">
+        <span class="material-icons-round">cloud_off</span>
+        <p>Nenhuma máquina reportou ainda.</p>
+        <p class="instruction">Instale o agente nas máquinas para começar.</p>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

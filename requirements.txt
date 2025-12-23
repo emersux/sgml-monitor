@@ -1,0 +1,8 @@
+flask
+requests
+psutil
+wmi
+py-cpuinfo
+pywin32
+pyinstaller
+gunicorn

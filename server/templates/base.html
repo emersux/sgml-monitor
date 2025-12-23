@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SGML - Gerenciamento de Máquinas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header class="top-nav">
+            <div class="logo">
+                <span class="material-icons-round">memory</span>
+                SGML
+            </div>
+            <nav>
+                <a href="/" class="{% if request.path == '/' %}active{% endif %}">Dashboard</a>
+            </nav>
+        </header>
+
+        <main class="content">
+            {% block content %}{% endblock %}
+        </main>
+        
+        <footer>
+            <p>Sistema de Gerenciamento de Máquinas Local &copy; 2024</p>
+        </footer>
+    </div>
+</body>
+</html>

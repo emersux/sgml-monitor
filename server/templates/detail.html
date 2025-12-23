@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="detail-header">
+    <a href="/" class="back-link">
+        <span class="material-icons-round">arrow_back</span> Voltar
+    </a>
+    <div class="title-section">
+        <h1>{{ machine.hostname }}</h1>
+        <div class="badges">
+            <span class="badge os">{{ (machine.os_info|from_json).system }}</span>
+            <span class="badge ip">{{ machine.ip }}</span>
+        </div>
+    </div>
+</div>
+
+<div class="detail-grid">
+    <!-- Hardware Specs -->
+    <div class="panel hardware-panel">
+        <h3><span class="material-icons-round">memory</span> Hardware</h3>
+        {% set cpu = machine.cpu_info|from_json %}
+        {% set mem = machine.memory_info|from_json %}
+        {% set disk = machine.disk_info|from_json %}
+
+        <div class="spec-list">
+            <div class="spec-item">
+                <span class="label">Processador</span>
+                <span class="value">{{ cpu.brand }}</span>
+                <span class="sub-value">{{ cpu.count }} Núcleos / {{ cpu.hz }}</span>
+            </div>
+            <div class="spec-item">
+                <span class="label">Memória</span>
+                <span class="value">{{ (mem.total / (1024**3))|round(1) }} GB Total</span>
+                <span class="sub-value">{{ mem.percent }}% em uso</span>
+            </div>
+            <div class="spec-item">
+                <span class="label">Armazenamento</span>
+                {% for d in disk %}
+                <div class="disk-row">
+                    <span class="value">{{ d.device }} ({{ d.fstype }})</span>
+                    <div class="progress-bar">
+                        <div class="fill" style="width: {{ d.percent }}%"></div>
+                    </div>
+                    <span class="sub-value">{{ d.percent }}% ocupado</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- System Info -->
+    <div class="panel system-panel">
+        <h3><span class="material-icons-round">info</span> Sistema & Garantia</h3>
+        <div class="spec-list">
+            <div class="spec-item">
+                <span class="label">Fabricante</span>
+                <span class="value">{{ machine.manufacturer }}</span>
+            </div>
+            <div class="spec-item">
+                <span class="label">Serial Number</span>
+                <span class="value">{{ machine.serial_number }}</span>
+            </div>
+            <div class="spec-item">
+                <span class="label">Tempo Ligado</span>
+                <span class="value">{{ machine.uptime|format_uptime }}</span>
+            </div>
+            <div class="spec-item">
+                <span class="label">Último Report</span>
+                <span class="value">{{ machine.last_seen }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Geo -->
+    <div class="panel geo-panel">
+        <h3><span class="material-icons-round">location_on</span> Localização</h3>
+        {% set geo = machine.geolocation|from_json %}
+        <div class="geo-display">
+            <div class="geo-text">
+                <span class="city">{{ geo.city }}</span>,
+                <span class="region">{{ geo.region }}</span>
+                <span class="country">{{ geo.country }}</span>
+            </div>
+            <span class="ip-info">IP Público: {{ geo.ip }}</span>
+            <span class="org-info">{{ geo.org }}</span>
+        </div>
+    </div>
+
+    <!-- Software -->
+    <div class="panel software-panel full-width">
+        <h3><span class="material-icons-round">apps</span> Software Instalado</h3>
+        {% set software = machine.installed_software|from_json %}
+        <div class="software-table-wrapper">
+            <table class="software-table">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Versão</th>
+                        <th>Vendedor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sw in software[:50] %}
+                    <tr>
+                        <td>{{ sw.name }}</td>
+                        <td>{{ sw.version }}</td>
+                        <td>{{ sw.vendor }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3">Nenhum software detectado ou lista vazia.</td>
+                    </tr>
+                    {% endfor %}
+                    {% if software|length > 50 %}
+                    <tr>
+                        <td colspan="3" class="more-row">... e mais {{ software|length - 50 }} itens</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
